@@ -1,0 +1,38 @@
+{
+  "package_version": "0.1.0-alpha.1",
+  "source_origin": "maintainer server snapshot, 2026-11-04",
+  "plugins": {
+    "ARP_Skills.sma": {
+      "uploaded_source_sha256": "aeb74205fdb304cbeec7f2709b64b409a76915749fb071fc850071f7234413fe",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Cooking.sma": {
+      "uploaded_source_sha256": "a10b0dfcbe4dba643d1736607a83b31f52d3bc52c84bcb213f65aa0af2929248",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Computers.sma": {
+      "uploaded_source_sha256": "dd0018138a94d496c599809e9b2e1c3391697ed8c098cc3c1e039296185dfa0d",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Weapons.sma": {
+      "uploaded_source_sha256": "e499d40daf189ff2860331a5d770f8c4715e5bb343b6c2d1dfeb60f628d7f2fa",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_General.sma": {
+      "uploaded_source_sha256": "d89222086779cc0748ba99cec883622603c580e5e2fe7590b69a41608ca6027d",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Drugs.sma": {
+      "uploaded_source_sha256": "ff322616cc3aab705fd62754a0b5888cbbc22610ce8c339c1ed1b42a601ff5f0",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Fighting.sma": {
+      "uploaded_source_sha256": "55eac9f56b81640a09e37cda112af8866d1f80b304d96f4b68a4c4084f106941",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    },
+    "ARP_Law.sma": {
+      "uploaded_source_sha256": "bd03dd88190ffb25636c05b8b07d349490605dad198ff71a1932e858907a408d",
+      "runtime_source_changes": "none; license/project comment added and line endings normalized"
+    }
+  }
+}
