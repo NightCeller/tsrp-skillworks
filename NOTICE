@@ -1,0 +1,19 @@
+TSRP SkillWorks
+Maintained by NightCeller. Independent community project.
+
+The project sources, scripts and documentation in this repository are offered
+under the GNU General Public License, version 3 or (at your option) any later
+version. See LICENSE. The software is provided without warranty.
+
+Additional permission under GNU GPL version 3 section 7:
+For the code in this project, permission is granted to link with the Half-Life
+Game Engine (HL Engine) and Modified Game Libraries (MODs) developed via the
+Half-Life 1 SDK as full replacements for Valve games. You must obey the GNU GPL
+in all respects for all other code used other than the HL Engine and MODs.
+This permission follows the exception offered by AMX Mod X for works based on it.
+It does not grant rights to redistribute Valve or The Specialists assets.
+
+Apollo-RP, AMX Mod X, Metamod, The Specialists and Harbu RP belong to their
+respective authors. No endorsement or official association is implied.
+External headers, runtime libraries, the Apollo Core and Harbu sources are not
+redistributed in this source package. Their licences are not replaced by NOTICE.
