@@ -34,8 +34,8 @@ money does not pay for lessons. Teacher-led education is not implemented.
 
 Buy the matching pack in /cook, then cook. One pack is consumed at successful
 completion for one food item. Cancellation does not consume it. The food effect
-belongs to Apollo HungerMod. Prices/thresholds/times are source constants in this
-version; cooking.cfg toggles cooking and the built-in pack shop only.
+belongs to Apollo HungerMod. cooking.cfg controls pack prices, recipe skill
+requirements, times and enable switches, plus the built-in pack shop.
 
 ## Computers — ATM attempts
 
@@ -60,8 +60,8 @@ reward and cooldown settings in computers.cfg before public-server balancing.
 | Akimbo Beretta 92Fs | 50 | $100 | 90s |
 
 Outputs are existing Apollo inventory items. Equipping/using them is handled by
-Apollo TS compatibility. Prices and times are configurable in weapons.cfg;
-thresholds and output names are source constants. Cancellation is free.
+Apollo TS compatibility. Recipe switches, thresholds, prices and times are
+configurable in weapons.cfg. Output names remain fixed. Cancellation is free.
 
 ## General — WALLET payment at completion
 
@@ -74,7 +74,7 @@ thresholds and output names are source constants. Cancellation is free.
 
 Missing items appear unavailable. Tape was absent on the maintainer's installation;
 its absence does not prevent other recipes. Item effects belong to Apollo Items.
-Prices and times are configurable in general.cfg. Cancellation is free.
+Recipe switches, thresholds, prices and times are configurable in general.cfg. Cancellation is free.
 
 ## Drugs — fictional game inventory only
 
@@ -86,8 +86,8 @@ Prices and times are configurable in general.cfg. Cancellation is free.
 | Cocaine | 31 | $75 | 90s |
 
 The addon creates existing consumable inventory items; it adds no new real-world
-procedures or item effects. Missing outputs are unavailable. Costs/times are in
-drugs.cfg; cancellation is free and payment occurs at completion.
+procedures or item effects. Missing outputs are unavailable. Recipe switches,
+thresholds, costs and times are in drugs.cfg; cancellation is free and payment occurs at completion.
 
 ## Fighting and Law — job entry
 
@@ -96,6 +96,7 @@ drugs.cfg; cancellation is free and payment occurs at completion.
 | Fighting | 16 | Dojo Worker; Fighter | $20/hr; $30/hr; no access flags |
 | Law | 21 | Lawyer; Jury; City Judge | $20/hr; $20/hr; $30/hr; stock t flag |
 
+Job entry thresholds use `arp_fighting_job_skill` and `arp_law_job_skill`.
 Setup commands preserve existing jobs/salaries. Menus replace the current job only
 after confirmation and another skill check. No fee, automatic promotion or skill
 gain. No automatic dismissal when a skill is subsequently lowered. Law adds no
@@ -106,3 +107,6 @@ Fighting also implements an experimental bonus, disabled in the public config.
 If enabled at 25, skill 16 calculates +4%, 50 +12.5%, and 100 +25%. It only targets
 direct unarmed player damage with TS weapon 36; armed kicks do not qualify.
 Actual classification and effects are untested. See TESTING.md before enabling.
+
+See [CONFIGURATION.md](CONFIGURATION.md) for limits and behavior when settings
+change while a menu or activity is active. Defaults above are unchanged from v1.

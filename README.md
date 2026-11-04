@@ -3,9 +3,9 @@
 **Independent skills and progression addons for The Specialists Roleplay.**
 Built for Apollo-RP, AMX Mod X and SQLite. Maintained by [NightCeller](https://github.com/NightCeller).
 
-> Alpha release candidate: `0.1.0-alpha.1`. Source distribution; no precompiled plugins.
+> v2 development candidate: `2.0.0-alpha.1`. Source distribution; no precompiled plugins.
 > This is an independent community project, not an official Apollo-RP release and
-> not affiliated with or endorsed by its maintainers. The project title is a working name.
+> not affiliated with or endorsed by its maintainers. v2 has compiled successfully; in-game upgrade testing is pending.
 
 SkillWorks adds seven persistent skills, paid self-study, inventory crafting,
 ATM gameplay and skill-gated jobs. It extends an existing working Apollo server;
@@ -13,14 +13,26 @@ it is not a replacement roleplay framework or a complete server download.
 
 | Module | Plugin version | Gameplay |
 | --- | --- | --- |
-| Skills | 0.2.1 | Seven skills, range 0–100, SQLite persistence and bank-funded study |
-| Cooking | 0.3.0 | Ingredient packs, Fries, Hamburger and Pizza |
-| Computers | 0.4.0 | ATM attempts with persistent player and ATM cooldowns |
-| Weapons | 0.5.0 | Six existing Apollo weapon inventory items |
-| General | 0.6.1 | Flashlight, Tape where available, Lockpick and Electric Lockpick |
-| Drugs | 0.7.0 | Four existing fictional-game consumable inventory items |
-| Fighting | 0.8.0 | Dojo Worker/Fighter jobs; experimental unarmed bonus disabled by default |
-| Law | 0.9.0 | Lawyer, Jury and City Judge job selection |
+| Skills | 2.0.0-alpha.1 | Seven skills, range 0–100, SQLite persistence and bank-funded study |
+| Cooking | 2.0.0-alpha.1 | Ingredient packs, Fries, Hamburger and Pizza |
+| Computers | 2.0.0-alpha.1 | ATM attempts with persistent player and ATM cooldowns |
+| Weapons | 2.0.0-alpha.1 | Six existing Apollo weapon inventory items |
+| General | 2.0.0-alpha.1 | Flashlight, Tape where available, Lockpick and Electric Lockpick |
+| Drugs | 2.0.0-alpha.1 | Four existing fictional-game consumable inventory items |
+| Fighting | 2.0.0-alpha.1 | Dojo Worker/Fighter jobs; experimental unarmed bonus disabled by default |
+| Law | 2.0.0-alpha.1 | Lawyer, Jury and City Judge job selection |
+
+## New in v2
+
+Recipe enable switches, skill requirements, costs and durations are configurable.
+Cooking pack prices and Fighting/Law job thresholds are configurable too. Strict
+integer validation blocks malformed settings instead of interpreting text as zero.
+Confirmation menus detect changed terms, and timed actions cancel when relevant
+settings change. Existing saves and command names are preserved.
+
+Read [v2 upgrade and first test](docs/UPGRADING-V2.md) and
+[configuration reference](docs/CONFIGURATION.md). Education additions and engine
+CRC troubleshooting remain deferred. This is an alpha, not a tested stable v2 release.
 
 ## Start here
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* Apollo Fighting 0.8.0 - TSRP Server.
+/* SkillWorks Fighting 2.0.0-alpha.1 - configurable gameplay.
  * Skills are read-only. Apollo owns job persistence. No raw health writes.
  * Unarmed-only bonus: TSX converts WeaponInfo 0 to current weapon 36.
  * Jobs require explicit admin setup; never overwrite existing job definitions.
@@ -12,19 +12,19 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 #include <hamsandwich>
 #include <tsfun>
 
-#define VERSION "0.8.0"
+#define VERSION "2.0.0-alpha.1"
 #define KUNGFU_WEAPON 36
-#define REQUIRED_SKILL 16
 #define SQL_SKILL "SELECT fighting FROM arp_skills WHERE steamid='%s'"
 new const g_Jobs[][] = {"Dojo Worker", "Fighter"};
 new const g_Salaries[] = {20, 30};
 new Handle:g_Db = Empty_Handle;
 new bool:g_Ready, bool:g_CoreError, bool:g_DamageHook;
-new p_Enabled, p_Jobs, p_Bonus, p_Debug;
-new g_Menu[33] = {-1, ...}, g_Choice[33], g_QuotedSalary[33];
+new p_Required, p_Enabled, p_Jobs, p_Bonus, p_Debug;
+new g_Menu[33] = {-1, ...}, g_Choice[33], g_QuotedSalary[33], g_QuotedRequired[33];
 new g_CachedSkill[33], g_CachedUserid[33], g_CachedAuth[33][36];
 new Float:g_CacheTime[33];
 
@@ -44,8 +44,9 @@ public plugin_init()
 {
     register_cvar("arp_fighting_version", VERSION, FCVAR_SERVER);
     p_Enabled = register_cvar("arp_fighting_enabled", "1");
+    p_Required = register_cvar("arp_fighting_job_skill", "16");
     p_Jobs = register_cvar("arp_fighting_jobs", "1");
-    p_Bonus = register_cvar("arp_fighting_bonus_percent", "25");
+    p_Bonus = register_cvar("arp_fighting_bonus_percent", "0");
     p_Debug = register_cvar("arp_fighting_debug", "0");
     register_clcmd("arp_fighting", "CmdMenu");
     register_concmd("arp_fighting_setup", "CmdSetup");
@@ -107,7 +108,7 @@ public RefreshSkills()
     for (new id = 1; id <= 32; id++)
     {
         g_CachedSkill[id] = 0; g_CachedUserid[id] = 0;
-        if (!g_Ready || !get_pcvar_num(p_Enabled) || !is_user_alive(id)) continue;
+        if (!g_Ready || !SW_Enabled(p_Enabled) || !is_user_alive(id)) continue;
         new auth[36];
         if (!Identity(id, auth, charsmax(auth))) continue;
         new skill = Skill(id);
@@ -121,18 +122,18 @@ public RefreshSkills()
 Float:BonusLimit()
 {
     // Invalid settings disable the bonus, rather than permitting excessive damage.
-    new Float:percent = get_pcvar_float(p_Bonus);
-    return percent >= 0.0 && percent <= 25.0 ? percent : 0.0;
+    new percent;
+    return SW_ReadInt(p_Bonus, 0, 25, percent) ? float(percent) : 0.0;
 }
 public OnDamage(victim, inflictor, attacker, Float:damage, bits)
 {
-    if (!g_Ready || !get_pcvar_num(p_Enabled) || attacker < 1 || attacker > 32 || victim < 1 || victim > 32 || attacker == victim) return HAM_IGNORED;
+    if (!g_Ready || !SW_Enabled(p_Enabled) || attacker < 1 || attacker > 32 || victim < 1 || victim > 32 || attacker == victim) return HAM_IGNORED;
     if (!is_user_alive(attacker) || !is_user_alive(victim) || damage <= 0.0) return HAM_IGNORED;
     new weapon = ts_getuserwpn(attacker);
     // Conservative: unarmed, direct player damage only. Exclude bullet, explosion,
     // fall, burn and shock types even when another addon attributes these to a player.
     new bool:eligible = weapon == KUNGFU_WEAPON && inflictor == attacker && !(bits & ((1<<1)|(1<<3)|(1<<5)|(1<<6)|(1<<8)));
-    if (get_pcvar_num(p_Debug))
+    if (SW_Enabled(p_Debug))
         log_amx("HIT attacker=%d victim=%d weapon=%d inflictor=%d bits=%d base=%.2f eligible=%d", attacker, victim, weapon, inflictor, bits, damage, eligible);
     if (!eligible || !g_CachedUserid[attacker] || get_user_userid(attacker) != g_CachedUserid[attacker] || get_gametime() - g_CacheTime[attacker] > 2.0) return HAM_IGNORED;
     new auth[36];
@@ -141,7 +142,7 @@ public OnDamage(victim, inflictor, attacker, Float:damage, bits)
     if (bonus <= 0.0) return HAM_IGNORED;
     new Float:result = damage * (1.0 + bonus / 100.0);
     SetHamParamFloat(4, result);
-    if (get_pcvar_num(p_Debug)) log_amx("BONUS skill=%d percent=%.2f before=%.2f after=%.2f", g_CachedSkill[attacker], bonus, damage, result);
+    if (SW_Enabled(p_Debug)) log_amx("BONUS skill=%d percent=%.2f before=%.2f after=%.2f", g_CachedSkill[attacker], bonus, damage, result);
     return HAM_HANDLED;
 }
 ExactJob(const wanted[])
@@ -173,7 +174,7 @@ public CmdSetup(id)
 bool:Available(id)
 {
     new auth[36];
-    return g_Ready && get_pcvar_num(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
+    return g_Ready && SW_Enabled(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
 }
 CloseMenu(id)
 {
@@ -192,11 +193,13 @@ Selection(id, menu, item)
     }
     menu_destroy(menu); return choice;
 }
-bool:Eligible(id, r, &job)
+bool:Eligible(id, r, &job, &required)
 {
-    if (!Available(id) || !get_pcvar_num(p_Jobs)) return false;
-    if (Skill(id) < REQUIRED_SKILL)
-    { client_print(id, print_chat, "[Fighting] Fighting 16 required; skill must be available."); return false; }
+    if (!Available(id) || !SW_Enabled(p_Jobs)) return false;
+    if (!SW_ReadInt(p_Required, 0, 100, required))
+    { client_print(id, print_chat, "[Fighting] Invalid job skill setting; nothing changed."); return false; }
+    if (Skill(id) < required)
+    { client_print(id, print_chat, "[Fighting] Fighting %d required; skill must be available.", required); return false; }
     job = ExactJob(g_Jobs[r]);
     if (!job || ARP_GetJobAccess(job) != 0)
     { client_print(id, print_chat, "[Fighting] Job missing or has access flags. Ask an admin; self-enrolment blocked."); return false; }
@@ -210,14 +213,17 @@ public CmdMenu(id)
     new skill = Skill(id);
     if (skill < 0) { client_print(id, print_chat, "[Fighting] Skill unavailable; nothing changed."); return PLUGIN_HANDLED; }
     CloseMenu(id);
+    new required;
+    if (!SW_ReadInt(p_Required, 0, 100, required))
+    { client_print(id, print_chat, "[Fighting] Invalid job skill setting; nothing changed."); return PLUGIN_HANDLED; }
     new title[192], line[128], key[8];
     new Float:bonus = g_DamageHook ? BonusLimit() * float(skill) / 100.0 : 0.0;
-    formatex(title, charsmax(title), "Fighting %d/100 - unarmed bonus %.2f%%^nJobs require Fighting 16^nChoosing a job replaces your current job", skill, bonus);
+    formatex(title, charsmax(title), "Fighting %d/100 - unarmed bonus %.2f%%^nJobs require Fighting %d^nChoosing a job replaces your current job", skill, bonus, required);
     new menu = menu_create(title, "JobHandler");
     for (new r; r < sizeof g_Jobs; r++)
     {
         new job = ExactJob(g_Jobs[r]);
-        if (!get_pcvar_num(p_Jobs) || !job) formatex(line, charsmax(line), "%s - unavailable", g_Jobs[r]);
+        if (!SW_Enabled(p_Jobs) || !job) formatex(line, charsmax(line), "%s - unavailable", g_Jobs[r]);
         else if (ARP_GetJobAccess(job)) formatex(line, charsmax(line), "%s - access flags: admin review required", g_Jobs[r]);
         else formatex(line, charsmax(line), "%s - $%d/hr", g_Jobs[r], ARP_GetJobSalary(job));
         num_to_str(r, key, charsmax(key)); menu_additem(menu, line, key);
@@ -226,9 +232,10 @@ public CmdMenu(id)
 }
 public JobHandler(id, menu, item)
 {
-    new r = Selection(id, menu, item), job;
-    if (r < 0 || r >= sizeof g_Jobs || !Eligible(id, r, job)) return PLUGIN_HANDLED;
+    new r = Selection(id, menu, item), job, required;
+    if (r < 0 || r >= sizeof g_Jobs || !Eligible(id, r, job, required)) return PLUGIN_HANDLED;
     g_Choice[id] = r; g_QuotedSalary[id] = ARP_GetJobSalary(job);
+    g_QuotedRequired[id] = required;
     new title[192];
     formatex(title, charsmax(title), "Replace your current job with %s?^nSalary: $%d/hr^nNo fee. No special access flags.", g_Jobs[r], g_QuotedSalary[id]);
     new confirm = menu_create(title, "ConfirmJob");
@@ -238,10 +245,10 @@ public JobHandler(id, menu, item)
 public ConfirmJob(id, menu, item)
 {
     if (Selection(id, menu, item) != 0) return PLUGIN_HANDLED;
-    new r = g_Choice[id], job;
-    if (!Eligible(id, r, job)) return PLUGIN_HANDLED;
-    if (ARP_GetJobSalary(job) != g_QuotedSalary[id])
-    { client_print(id, print_chat, "[Fighting] Salary changed; reopen /fighting."); return PLUGIN_HANDLED; }
+    new r = g_Choice[id], job, required;
+    if (!Eligible(id, r, job, required)) return PLUGIN_HANDLED;
+    if (ARP_GetJobSalary(job) != g_QuotedSalary[id] || required != g_QuotedRequired[id])
+    { client_print(id, print_chat, "[Fighting] Job terms changed; reopen /fighting."); return PLUGIN_HANDLED; }
     ARP_SetUserJobId(id, job);
     if (ARP_GetUserJobId(id) == job)
     {

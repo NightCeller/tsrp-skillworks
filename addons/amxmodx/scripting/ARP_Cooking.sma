@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* Apollo Cooking 0.3.0 - Stage 3 pilot, TSRP Server.
- * Keep ARP_Skills 0.2.1 installed. This addon reads its cooking column only.
+/* SkillWorks Cooking 2.0.0-alpha.1 - configurable gameplay.
+ * Keep ARP_Skills installed. This addon reads its cooking column only.
  * Ingredient packs and supplies shop are new design, not an exact Harbu port.
  * No skill awards, random failures, location restriction or education changes.
  * Resources change only at completion. Apollo owns inventory/wallet persistence;
@@ -14,18 +14,23 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 
-#define VERSION "0.3.0"
+#define VERSION "2.0.0-alpha.1"
 #define RECIPES 3
 #define MAX_STOCK 1000
 new const g_Food[RECIPES][] = {"Fries", "Hamburger", "Pizza"};
 new const g_Pack[RECIPES][] = {"Cooking Potato Pack", "Cooking Burger Pack", "Cooking Pizza Pack"};
-new const g_Level[RECIPES] = {10, 10, 20};
-new const g_Seconds[RECIPES] = {30, 60, 60};
-new const g_Price[RECIPES] = {10, 35, 25};
+new const g_Keys[RECIPES][] = {"fries", "hamburger", "pizza"};
+new const g_SkillDefaults[RECIPES][] = {"10", "10", "20"};
+new const g_TimeDefaults[RECIPES][] = {"30", "60", "60"};
+new const g_CostDefaults[RECIPES][] = {"10", "35", "25"};
+new p_Required[RECIPES], p_Time[RECIPES], p_Cost[RECIPES], p_RecipeEnabled[RECIPES];
+new g_QuoteTime[33], g_QuoteRequired[33], g_QuoteSupply[33][RECIPES];
+new g_RunTime[33], g_RunRequired[33];
 new g_Input[RECIPES], g_Output[RECIPES];
 new Handle:g_Db = Empty_Handle;
-new bool:g_Ready;
+new bool:g_Ready, bool:g_CoreError;
 new p_Enabled, p_Supplies;
 new g_Menu[33] = {-1, ...};
 new g_Active[33], g_Userid[33]; // recipe+1 or zero
@@ -37,6 +42,18 @@ public plugin_init()
     register_cvar("arp_cooking_version", VERSION, FCVAR_SERVER);
     p_Enabled = register_cvar("arp_cooking_enabled", "1");
     p_Supplies = register_cvar("arp_cooking_supplies", "1");
+    new name[64];
+    for (new r; r < RECIPES; r++)
+    {
+        formatex(name, charsmax(name), "arp_cooking_skill_%s", g_Keys[r]);
+        p_Required[r] = register_cvar(name, g_SkillDefaults[r]);
+        formatex(name, charsmax(name), "arp_cooking_seconds_%s", g_Keys[r]);
+        p_Time[r] = register_cvar(name, g_TimeDefaults[r]);
+        formatex(name, charsmax(name), "arp_cooking_cost_%s", g_Keys[r]);
+        p_Cost[r] = register_cvar(name, g_CostDefaults[r]);
+        formatex(name, charsmax(name), "arp_cooking_enabled_%s", g_Keys[r]);
+        p_RecipeEnabled[r] = register_cvar(name, "1");
+    }
     register_clcmd("arp_cook", "CmdCook");
     register_clcmd("arp_cook_cancel", "CmdCancel");
     register_event("DeathMsg", "OnDeath", "a");
@@ -94,7 +111,7 @@ public plugin_cfg()
         return;
     }
     SQL_FreeHandle(q);
-    g_Ready = true;
+    g_Ready = !g_CoreError;
     log_amx("ARP Cooking %s ready: three recipes, /cook, SQLite skills read-only.", VERSION);
 }
 
@@ -128,7 +145,7 @@ bool:Identity(id, auth[], len)
 bool:Available(id)
 {
     new auth[36];
-    if (!g_Ready || !get_pcvar_num(p_Enabled) || !is_user_alive(id) || !Identity(id, auth, charsmax(auth)))
+    if (!g_Ready || !SW_Enabled(p_Enabled) || !is_user_alive(id) || !Identity(id, auth, charsmax(auth)))
     {
         if (is_user_connected(id)) client_print(id, print_chat, "[Cooking] Be alive with your account loaded; cooking must be enabled.");
         return false;
@@ -186,12 +203,14 @@ public CmdCook(id)
         return PLUGIN_HANDLED;
     }
     CloseMenu(id);
-    new title[96], line[160], key[8];
+    new title[96], line[160], key[8], seconds, required;
     formatex(title, charsmax(title), "Cooking: %d/100^nOne pack makes one food item", skill);
     new menu = menu_create(title, "MainHandler");
     for (new r; r < RECIPES; r++)
     {
-        formatex(line, charsmax(line), "%s - skill %d, %ds (packs: %d)", g_Food[r], g_Level[r], g_Seconds[r], ARP_GetUserItemNum(id, g_Input[r]));
+        if (RecipeSettings(r, seconds, required))
+            formatex(line, charsmax(line), "%s - skill %d, %ds (packs: %d)", g_Food[r], required, seconds, ARP_GetUserItemNum(id, g_Input[r]));
+        else formatex(line, charsmax(line), "%s - DISABLED / INVALID SETTINGS", g_Food[r]);
         num_to_str(r, key, charsmax(key));
         menu_additem(menu, line, key);
     }
@@ -221,9 +240,15 @@ public MainHandler(id, menu, item)
     new r = TakeSelection(id, menu, item);
     if (r < 0 || !Available(id) || g_Active[id]) return PLUGIN_HANDLED;
     if (r == RECIPES) { Supplies(id); return PLUGIN_HANDLED; }
-    if (r >= RECIPES || !CanCook(id, r)) return PLUGIN_HANDLED;
+    if (r >= RECIPES) return PLUGIN_HANDLED;
+    new seconds, required;
+    if (!RecipeSettings(r, seconds, required))
+    { client_print(id, print_chat, "[Cooking] Recipe disabled or settings invalid. Nothing consumed."); return PLUGIN_HANDLED; }
+    if (!CanCook(id, r, required)) return PLUGIN_HANDLED;
+    g_QuoteTime[id] = seconds;
+    g_QuoteRequired[id] = required;
     new title[192], key[8];
-    formatex(title, charsmax(title), "Cook 1 %s?^nUses 1 %s on completion^nTime: %d seconds. No skill gain.", g_Food[r], g_Pack[r], g_Seconds[r]);
+    formatex(title, charsmax(title), "Cook 1 %s?^nUses 1 %s on completion^nTime: %d seconds. No skill gain.", g_Food[r], g_Pack[r], seconds);
     new confirm = menu_create(title, "ConfirmHandler");
     num_to_str(r, key, charsmax(key));
     menu_additem(confirm, "Start cooking", key);
@@ -232,12 +257,25 @@ public MainHandler(id, menu, item)
     return PLUGIN_HANDLED;
 }
 
-bool:CanCook(id, r)
+bool:RecipeSettings(r, &seconds, &required)
+{
+    return SW_Enabled(p_RecipeEnabled[r])
+        && SW_ReadInt(p_Time[r], 1, 3600, seconds)
+        && SW_ReadInt(p_Required[r], 0, 100, required);
+}
+
+bool:SupplyPrice(r, &price)
+{
+    new seconds, required;
+    return RecipeSettings(r, seconds, required) && SW_ReadInt(p_Cost[r], 0, 1000000, price);
+}
+
+bool:CanCook(id, r, required)
 {
     new skill = CookingSkill(id);
-    if (skill < g_Level[r])
+    if (skill < required)
     {
-        client_print(id, print_chat, "[Cooking] Requires Cooking %d; your skill is %d (negative means unavailable).", g_Level[r], skill);
+        client_print(id, print_chat, "[Cooking] Requires Cooking %d; your skill is %d (negative means unavailable).", required, skill);
         return false;
     }
     if (ARP_GetUserItemNum(id, g_Input[r]) < 1)
@@ -256,26 +294,38 @@ bool:CanCook(id, r)
 public ConfirmHandler(id, menu, item)
 {
     new r = TakeSelection(id, menu, item);
-    if (r < 0 || r >= RECIPES || !Available(id) || g_Active[id] || !CanCook(id, r)) return PLUGIN_HANDLED;
+    if (r < 0 || r >= RECIPES || !Available(id) || g_Active[id]) return PLUGIN_HANDLED;
+    new seconds, required;
+    if (!RecipeSettings(r, seconds, required) || seconds != g_QuoteTime[id] || required != g_QuoteRequired[id])
+    { client_print(id, print_chat, "[Cooking] Recipe changed; reopen /cook to review."); return PLUGIN_HANDLED; }
+    if (!CanCook(id, r, required)) return PLUGIN_HANDLED;
+    g_RunTime[id] = seconds;
+    g_RunRequired[id] = required;
     g_Active[id] = r + 1;
     g_Userid[id] = get_user_userid(id);
     get_user_authid(id, g_Auth[id], charsmax(g_Auth[]));
-    g_End[id] = get_gametime() + float(g_Seconds[r]);
-    client_print(id, print_chat, "[Cooking] Preparing %s for %d seconds. /cancelcook cancels without using a pack.", g_Food[r], g_Seconds[r]);
+    g_End[id] = get_gametime() + float(seconds);
+    client_print(id, print_chat, "[Cooking] Preparing %s for %d seconds. /cancelcook cancels without using a pack.", g_Food[r], seconds);
     return PLUGIN_HANDLED;
 }
 
 Supplies(id)
 {
-    if (!get_pcvar_num(p_Supplies))
+    if (!SW_Enabled(p_Supplies))
     {
         client_print(id, print_chat, "[Cooking] The supplies menu is disabled.");
         return;
     }
-    new menu = menu_create("Buy ONE pack - charges your WALLET", "SupplyHandler"), line[96], key[8];
+    new menu = menu_create("Buy ONE pack - charges your WALLET", "SupplyHandler"), line[96], key[8], price;
     for (new r; r < RECIPES; r++)
     {
-        formatex(line, charsmax(line), "%s - $%d", g_Pack[r], g_Price[r]);
+        g_QuoteSupply[id][r] = -1;
+        if (SupplyPrice(r, price))
+        {
+            g_QuoteSupply[id][r] = price;
+            formatex(line, charsmax(line), "%s - $%d", g_Pack[r], price);
+        }
+        else formatex(line, charsmax(line), "%s - DISABLED / INVALID SETTINGS", g_Pack[r]);
         num_to_str(r, key, charsmax(key));
         menu_additem(menu, line, key);
     }
@@ -286,17 +336,26 @@ Supplies(id)
 public SupplyHandler(id, menu, item)
 {
     new r = TakeSelection(id, menu, item);
-    if (r < 0 || r >= RECIPES || !Available(id) || !get_pcvar_num(p_Supplies) || g_Active[id]) return PLUGIN_HANDLED;
+    if (r < 0 || r >= RECIPES || !Available(id) || !SW_Enabled(p_Supplies) || g_Active[id]) return PLUGIN_HANDLED;
+    new price;
+    if (!SupplyPrice(r, price) || price != g_QuoteSupply[id][r])
+    { client_print(id, print_chat, "[Cooking] Pack price changed or recipe disabled. Reopen /cook; nothing charged."); return PLUGIN_HANDLED; }
     new wallet = ARP_GetUserWallet(id), count = ARP_GetUserItemNum(id, g_Input[r]);
-    if (wallet < g_Price[r] || count >= MAX_STOCK)
+    if (wallet < price || count >= MAX_STOCK)
     {
         client_print(id, print_chat, "[Cooking] Insufficient wallet money or pack limit reached; nothing bought.");
         return PLUGIN_HANDLED;
     }
     ARP_SetUserItemNum(id, g_Input[r], count + 1);
     if (ARP_GetUserItemNum(id, g_Input[r]) != count + 1) return PLUGIN_HANDLED;
-    ARP_SetUserWallet(id, wallet - g_Price[r]);
-    client_print(id, print_chat, "[Cooking] Bought 1 %s for $%d from your wallet.", g_Pack[r], g_Price[r]);
+    ARP_SetUserWallet(id, wallet - price);
+    if (ARP_GetUserWallet(id) != wallet - price)
+    {
+        ARP_SetUserItemNum(id, g_Input[r], count);
+        client_print(id, print_chat, "[Cooking] Payment failed; removed the purchased pack.");
+        return PLUGIN_HANDLED;
+    }
+    client_print(id, print_chat, "[Cooking] Bought 1 %s for $%d from your wallet.", g_Pack[r], price);
     return PLUGIN_HANDLED;
 }
 
@@ -306,15 +365,20 @@ public CookingTick()
     {
         if (!g_Active[id]) continue;
         new auth[36];
-        if (!g_Ready || !get_pcvar_num(p_Enabled) || !is_user_alive(id) || !Identity(id, auth, charsmax(auth)) || get_user_userid(id) != g_Userid[id] || !equal(auth, g_Auth[id]))
+        if (!g_Ready || !SW_Enabled(p_Enabled) || !is_user_alive(id) || !Identity(id, auth, charsmax(auth)) || get_user_userid(id) != g_Userid[id] || !equal(auth, g_Auth[id]))
         {
             Cancel(id, true);
             continue;
         }
+        new r = g_Active[id] - 1, seconds, required;
+        if (!RecipeSettings(r, seconds, required) || seconds != g_RunTime[id] || required != g_RunRequired[id])
+        {
+            client_print(id, print_chat, "[Cooking] Recipe settings changed or disabled. Nothing consumed.");
+            Cancel(id, false); continue;
+        }
         if (get_gametime() < g_End[id]) continue;
-        new r = g_Active[id] - 1;
         g_Active[id] = 0; // Clear before committing: never complete the same job twice.
-        if (!CanCook(id, r))
+        if (!CanCook(id, r, required))
         {
             client_print(id, print_chat, "[Cooking] Cancelled; requirements changed. Nothing consumed.");
             continue;
@@ -345,7 +409,7 @@ public CmdCancel(id) { Cancel(id, true); CloseMenu(id); return PLUGIN_HANDLED; }
 public OnDeath() { new id = read_data(2); Cancel(id, true); CloseMenu(id); }
 public client_disconnected(id) { Cancel(id, false); CloseMenu(id); }
 public client_putinserver(id) { Cancel(id, false); CloseMenu(id); }
-public ARP_Error(const reason[]) { g_Ready = false; }
+public ARP_Error(const reason[]) { g_CoreError = true; g_Ready = false; }
 public plugin_end()
 {
     for (new id = 1; id <= 32; id++) { Cancel(id, false); CloseMenu(id); }

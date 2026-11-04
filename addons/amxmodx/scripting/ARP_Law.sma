@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* Apollo Law 0.9.0 - TSRP Server.
- * Law 21 unlocks Lawyer, Jury and City Judge job selection.
+/* SkillWorks Law 2.0.0-alpha.1 - configurable gameplay.
+ * Configurable Law threshold (default 21) for Lawyer, Jury and City Judge.
  * Reads existing skills; Apollo owns salary and job persistence.
  * Existing job definitions are never overwritten. Admin setup creates missing jobs.
  * Only empty access or the stock Mecklenburg t flag is permitted for enrolment.
@@ -13,22 +13,22 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 
-#define VERSION "0.9.0"
-#define REQUIRED_SKILL 21
+#define VERSION "2.0.0-alpha.1"
 #define SQL_SKILL "SELECT law FROM arp_skills WHERE steamid='%s'"
 new const g_Jobs[][] = {"Lawyer", "Jury", "City Judge"};
 new const g_Salaries[] = {20, 20, 30};
 new Handle:g_Db = Empty_Handle;
 new bool:g_Ready, bool:g_CoreError;
-new p_Enabled;
-new g_Menu[33] = {-1, ...}, g_Choice[33], g_QuotedSalary[33];
+new p_Required, p_Enabled;
+new g_Menu[33] = {-1, ...}, g_Choice[33], g_QuotedSalary[33], g_QuotedRequired[33];
 
 public ARP_Init()
 {
     ARP_RegisterPlugin("Law", VERSION, "TSRP Server", "Skill-gated legal job selection");
-    ARP_RegisterChat("/law", "ChatLaw", "Choose a legal job with Law 21");
-    ARP_RegisterTeamChat("/law", "ChatLaw", "Choose a legal job with Law 21");
+    ARP_RegisterChat("/law", "ChatLaw", "Choose a skill-gated legal job");
+    ARP_RegisterTeamChat("/law", "ChatLaw", "Choose a skill-gated legal job");
     if (ARP_SqlMode() != SQLITE || !SQL_SetAffinity("sqlite"))
     { set_fail_state("Law requires Apollo SQLite mode."); return; }
     new error[256], code;
@@ -40,6 +40,7 @@ public plugin_init()
 {
     register_cvar("arp_law_version", VERSION, FCVAR_SERVER);
     p_Enabled = register_cvar("arp_law_enabled", "1");
+    p_Required = register_cvar("arp_law_job_skill", "21");
     register_clcmd("arp_law", "CmdMenu");
     register_concmd("arp_law_setup", "CmdSetup");
 
@@ -128,7 +129,7 @@ public CmdSetup(id)
 bool:Available(id)
 {
     new auth[36];
-    return g_Ready && get_pcvar_num(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
+    return g_Ready && SW_Enabled(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
 }
 CloseMenu(id)
 {
@@ -147,11 +148,13 @@ Selection(id, menu, item)
     }
     menu_destroy(menu); return choice;
 }
-bool:Eligible(id, r, &job)
+bool:Eligible(id, r, &job, &required)
 {
     if (!Available(id)) return false;
-    if (Skill(id) < REQUIRED_SKILL)
-    { client_print(id, print_chat, "[Law] Law 21 required; skill must be available."); return false; }
+    if (!SW_ReadInt(p_Required, 0, 100, required))
+    { client_print(id, print_chat, "[Law] Invalid job skill setting; nothing changed."); return false; }
+    if (Skill(id) < required)
+    { client_print(id, print_chat, "[Law] Law %d required; skill must be available.", required); return false; }
     job = ExactJob(g_Jobs[r]);
     if (!job || !SafeJobAccess(job))
     { client_print(id, print_chat, "[Law] Job missing or has access beyond stock t. Ask an admin; self-enrolment blocked."); return false; }
@@ -165,8 +168,11 @@ public CmdMenu(id)
     new skill = Skill(id);
     if (skill < 0) { client_print(id, print_chat, "[Law] Skill unavailable; nothing changed."); return PLUGIN_HANDLED; }
     CloseMenu(id);
+    new required;
+    if (!SW_ReadInt(p_Required, 0, 100, required))
+    { client_print(id, print_chat, "[Law] Invalid job skill setting; nothing changed."); return PLUGIN_HANDLED; }
     new title[192], line[128], key[8];
-    formatex(title, charsmax(title), "Law %d/100^nJobs require Law 21^nChoosing a job replaces your current job", skill);
+    formatex(title, charsmax(title), "Law %d/100^nJobs require Law %d^nChoosing a job replaces your current job", skill, required);
     new menu = menu_create(title, "JobHandler");
     for (new r; r < sizeof g_Jobs; r++)
     {
@@ -180,9 +186,10 @@ public CmdMenu(id)
 }
 public JobHandler(id, menu, item)
 {
-    new r = Selection(id, menu, item), job;
-    if (r < 0 || r >= sizeof g_Jobs || !Eligible(id, r, job)) return PLUGIN_HANDLED;
+    new r = Selection(id, menu, item), job, required;
+    if (r < 0 || r >= sizeof g_Jobs || !Eligible(id, r, job, required)) return PLUGIN_HANDLED;
     g_Choice[id] = r; g_QuotedSalary[id] = ARP_GetJobSalary(job);
+    g_QuotedRequired[id] = required;
     new title[192];
     formatex(title, charsmax(title), "Replace your current job with %s?^nSalary: $%d/hr^nNo fee. Uses the existing job access.", g_Jobs[r], g_QuotedSalary[id]);
     new confirm = menu_create(title, "ConfirmJob");
@@ -192,10 +199,10 @@ public JobHandler(id, menu, item)
 public ConfirmJob(id, menu, item)
 {
     if (Selection(id, menu, item) != 0) return PLUGIN_HANDLED;
-    new r = g_Choice[id], job;
-    if (!Eligible(id, r, job)) return PLUGIN_HANDLED;
-    if (ARP_GetJobSalary(job) != g_QuotedSalary[id])
-    { client_print(id, print_chat, "[Law] Salary changed; reopen /law."); return PLUGIN_HANDLED; }
+    new r = g_Choice[id], job, required;
+    if (!Eligible(id, r, job, required)) return PLUGIN_HANDLED;
+    if (ARP_GetJobSalary(job) != g_QuotedSalary[id] || required != g_QuotedRequired[id])
+    { client_print(id, print_chat, "[Law] Job terms changed; reopen /law."); return PLUGIN_HANDLED; }
     ARP_SetUserJobId(id, job);
     if (ARP_GetUserJobId(id) == job)
     {

@@ -6,7 +6,7 @@ trying to delete selected secrets.
 
 Excluded categories: all database/player data, data/vault folders, users.ini,
 SQL/connection settings, general server configs, plugin admin settings, logs,
-map data, compiled plugins, executables, modules, includes, maps/models/sounds,
+map data, compiled plugins, executables, modules, third-party includes, maps/models/sounds,
 original archives and personal machine paths. Only a standard GPL licence text
 was additionally taken from the distribution. No credentials are required to
 configure SkillWorks; it uses Apollo's existing connection tuple.
@@ -19,3 +19,7 @@ values are not reproduced here. These checks reduce accidental exposure but cann
 guarantee detection of every possible secret. Review each future commit.
 
 The original uploaded archive is unchanged and is not part of this package.
+
+v2 adds one project-owned include (`SkillWorks_Config.inc`), not any Apollo or AMXX
+headers. The source package excludes local build outputs. Its package checks pass;
+the private original server archive is not copied into this repository.

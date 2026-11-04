@@ -1,36 +1,33 @@
-# Publishing this project
+# Publishing v2 development
 
-Nothing in this package has created or published a GitHub repository.
-Suggested owner: NightCeller. Working repository name: `tsrp-skillworks`.
-Finalize the name before publishing; change README, NOTICE and this guide if needed.
+The project repository is [NightCeller/tsrp-skillworks](https://github.com/NightCeller/tsrp-skillworks).
+This candidate has not been pushed or tagged by the package/build tools.
+Keep the tested baseline available while v2 is being tested.
 
-1. Review LICENSE/NOTICE, credits and the testing limitations.
-2. Compile and smoke-test the candidate. Keep it labelled alpha.
-3. Create an empty repository on GitHub under your account. Begin private if you
-   want to review it first. Do not upload the original amxmodx.zip.
-4. Extract this package. From its root, run the commands below (Git must be installed).
-   GitHub Desktop is also suitable for adding/publishing this local folder.
+For the GitHub web workflow:
+
+1. Create a branch named `develop/v2-configurable-gameplay` from `main`.
+2. Upload the extracted source package's **contents** to that branch, preserving
+   `addons`, `docs`, `examples`, `tests`, `tools` and `.github` paths. Include the
+   new `scripting/include/SkillWorks_Config.inc`. Do not upload the full server archive.
+3. Review the changed files. Exclude compiled plugins, logs, databases, accounts
+   and credentials. Run the checks below before opening a pull request to `main`.
+4. Keep the pull request in draft while the v2 game tests are pending. Record each
+   actual test result in docs/TESTING.md; do not carry v1 results forward as v2 passes.
 
 ```sh
-git init -b main
-git add .
-git diff --cached --stat
-git commit -m "Prepare initial SkillWorks alpha source"
-# Replace OWNER and REPOSITORY with the repository you actually created.
-git remote add origin https://github.com/OWNER/REPOSITORY.git
-git push -u origin main
+python3 tools/check_package.py
+python3 -m unittest discover -s tests -v
 ```
 
-Use GitHub's normal sign-in flow; do not put access tokens in URLs or commit files.
-The repository description can be:
+The included `.github/workflows/checks.yml` runs these source checks on pushes and
+pull requests. It does not build or publish binaries. If hidden folders were omitted
+by the web upload, add the workflow file at that exact path.
 
-> Independent modular skills and progression for The Specialists Roleplay, built for Apollo-RP, AMX Mod X and SQLite.
+After live upgrade tests pass and you choose to publish a candidate, tag
+`v2.0.0-alpha.1` and mark it as a **pre-release**. Attach the matching source package.
+Do not replace a previously published tag with different source. Keep known limits,
+including untested combat, visible in the release notes. Binaries require matching
+source, dependency notices and recorded build details.
 
-After checking the initial commit, enable Issues and optionally Discussions/private
-vulnerability reporting. Mark the first tagged release **pre-release**, with tag
-`v0.1.0-alpha.1`. Release notes should link the known limitations and say Fighting
-damage is untested/disabled in the example config. No compiled plugins are supplied
-here; publish binaries only with matching source, reproducible build details and
-applicable dependency notices. Do not call this an official Apollo release.
-
-This source package intentionally leaves an unrelated full-server backup out of Git.
+Use GitHub's sign-in flow; never put tokens in URLs or commit files.

@@ -12,8 +12,9 @@
 
 The source snapshot supplied by the maintainer on 2026-11-04 matches the eight
 latest addon sources developed during this project. `source-manifest.json`
-records original source hashes, without personal account data. Repository edits
-add project/licence comments and normalize line endings; gameplay code is unchanged.
+records original source hashes, without personal account data. The initial package added only project/licence comments and normalized line endings.
+v2 changes configuration and action validation; see CHANGELOG.md. Original upload
+hashes remain in the manifest as provenance, not hashes of the current sources.
 Some in-game text still uses historical Apollo/Stage labels. Branding cleanup is
 tracked on the roadmap rather than silently changing the tested binaries.
 

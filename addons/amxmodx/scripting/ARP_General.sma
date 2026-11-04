@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* Apollo General 0.6.1 - TSRP Server. In-game crafting only.
+/* SkillWorks General 2.0.0-alpha.1 - configurable gameplay.
  * Requires ARP_Skills and ARP_Items. Reads skills; never changes them.
  * Adds existing Apollo utility inventory items, uses their existing item handlers.
  * Wallet is charged only at completion after all requirements are rechecked.
@@ -13,22 +13,23 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 
-#define VERSION "0.6.1"
+#define VERSION "2.0.0-alpha.1"
 #define RECIPES 4
 #define STOCK_LIMIT 1000
 #define SQL_SKILL "SELECT general FROM arp_skills WHERE steamid='%s'"
 new const g_Names[RECIPES][] = {"Flashlight", "Tape", "Lockpick", "Electric Lockpick"};
 new const g_Keys[RECIPES][] = {"flashlight", "tape", "lockpick", "electric"};
-new const g_Required[RECIPES] = {20, 20, 40, 60};
+new const g_SkillDefaults[RECIPES][] = {"20", "20", "40", "60"};
 new const g_CostDefaults[RECIPES][] = {"25", "1", "100", "250"};
 new const g_TimeDefaults[RECIPES][] = {"30", "30", "60", "90"};
-new g_Items[RECIPES], p_Cost[RECIPES], p_Time[RECIPES], p_Enabled;
+new g_Items[RECIPES], p_Cost[RECIPES], p_Time[RECIPES], p_Required[RECIPES], p_RecipeEnabled[RECIPES], p_Enabled;
 new Handle:g_Db = Empty_Handle;
 new bool:g_Ready, bool:g_CoreError;
 new g_Menu[33] = {-1, ...};
-new g_QuoteRecipe[33], g_QuoteCost[33], g_QuoteTime[33];
-new g_Active[33], g_RunCost[33], g_Userid[33], g_Auth[33][36];
+new g_QuoteRecipe[33], g_QuoteCost[33], g_QuoteTime[33], g_QuoteRequired[33];
+new g_Active[33], g_RunCost[33], g_RunTime[33], g_RunRequired[33], g_Userid[33], g_Auth[33][36];
 new Float:g_End[33];
 
 public plugin_init()
@@ -42,6 +43,10 @@ public plugin_init()
         p_Cost[r] = register_cvar(name, g_CostDefaults[r]);
         formatex(name, charsmax(name), "arp_general_seconds_%s", g_Keys[r]);
         p_Time[r] = register_cvar(name, g_TimeDefaults[r]);
+        formatex(name, charsmax(name), "arp_general_skill_%s", g_Keys[r]);
+        p_Required[r] = register_cvar(name, g_SkillDefaults[r]);
+        formatex(name, charsmax(name), "arp_general_enabled_%s", g_Keys[r]);
+        p_RecipeEnabled[r] = register_cvar(name, "1");
     }
     register_clcmd("arp_general", "CmdMenu");
     register_clcmd("arp_general_cancel", "CmdCancel");
@@ -130,7 +135,7 @@ bool:Identity(id, auth[], len)
 bool:Available(id)
 {
     new auth[36];
-    return g_Ready && get_pcvar_num(p_Enabled) != 0 && is_user_alive(id) && Identity(id, auth, charsmax(auth));
+    return g_Ready && SW_Enabled(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
 }
 Skill(id)
 {
@@ -144,13 +149,14 @@ Skill(id)
     SQL_FreeHandle(q);
     return (value >= 0 && value <= 100) ? value : -1;
 }
-bool:Settings(r, &cost, &seconds)
+bool:Settings(r, &cost, &seconds, &required)
 {
-    cost = get_pcvar_num(p_Cost[r]);
-    seconds = get_pcvar_num(p_Time[r]);
-    return cost >= 0 && cost <= 1000000 && seconds >= 1 && seconds <= 3600;
+    return SW_Enabled(p_RecipeEnabled[r])
+        && SW_ReadInt(p_Cost[r], 0, 1000000, cost)
+        && SW_ReadInt(p_Time[r], 1, 3600, seconds)
+        && SW_ReadInt(p_Required[r], 0, 100, required);
 }
-bool:Eligible(id, r, cost)
+bool:Eligible(id, r, cost, required)
 {
     if (!g_Items[r])
     {
@@ -158,9 +164,9 @@ bool:Eligible(id, r, cost)
         return false;
     }
     new skill = Skill(id);
-    if (skill < g_Required[r])
+    if (skill < required)
     {
-        client_print(id, print_chat, "[General] Requires General %d; yours is %d (negative means unavailable).", g_Required[r], skill);
+        client_print(id, print_chat, "[General] Requires General %d; yours is %d (negative means unavailable).", required, skill);
         return false;
     }
     if (ARP_GetUserWallet(id) < cost)
@@ -207,16 +213,18 @@ public CmdMenu(id)
     if (skill < 0)
     { client_print(id, print_chat, "[General] Could not read your skill; nothing changed."); return PLUGIN_HANDLED; }
     CloseMenu(id);
-    new title[96], line[160], key[8], cost, seconds;
+    new title[96], line[160], key[8], cost, seconds, required;
     formatex(title, charsmax(title), "General Crafting - skill %d/100^nWallet payment on completion", skill);
     new menu = menu_create(title, "RecipeHandler");
     for (new r; r < RECIPES; r++)
     {
-        if (!g_Items[r])
+        if (!SW_Enabled(p_RecipeEnabled[r]))
+            formatex(line, charsmax(line), "%s - DISABLED / INVALID SWITCH", g_Names[r]);
+        else if (!g_Items[r])
             formatex(line, charsmax(line), "%s - UNAVAILABLE", g_Names[r]);
-        else if (Settings(r, cost, seconds))
-            formatex(line, charsmax(line), "%s - skill %d, $%d, %ds", g_Names[r], g_Required[r], cost, seconds);
-        else formatex(line, charsmax(line), "%s - INVALID SERVER SETTINGS", g_Names[r]);
+        else if (Settings(r, cost, seconds, required))
+            formatex(line, charsmax(line), "%s - skill %d, $%d, %ds", g_Names[r], required, cost, seconds);
+        else formatex(line, charsmax(line), "%s - DISABLED / INVALID SETTINGS", g_Names[r]);
         num_to_str(r, key, charsmax(key));
         menu_additem(menu, line, key);
     }
@@ -228,13 +236,14 @@ public RecipeHandler(id, menu, item)
 {
     new r = Selection(id, menu, item);
     if (r < 0 || r >= RECIPES || !Available(id) || g_Active[id]) return PLUGIN_HANDLED;
-    new cost, seconds;
-    if (!Settings(r, cost, seconds))
-    { client_print(id, print_chat, "[General] Invalid recipe settings. Nothing changed."); return PLUGIN_HANDLED; }
-    if (!Eligible(id, r, cost)) return PLUGIN_HANDLED;
+    new cost, seconds, required;
+    if (!Settings(r, cost, seconds, required))
+    { client_print(id, print_chat, "[General] Recipe disabled or settings invalid. Nothing changed."); return PLUGIN_HANDLED; }
+    if (!Eligible(id, r, cost, required)) return PLUGIN_HANDLED;
     g_QuoteRecipe[id] = r;
     g_QuoteCost[id] = cost;
     g_QuoteTime[id] = seconds;
+    g_QuoteRequired[id] = required;
     new title[256];
     formatex(title, charsmax(title), "Craft 1 %s?^nTime: %ds^nWallet charge at completion: $%d^nDelivered to /items. No skill gain.^nCancel/death/disconnect: no charge.", g_Names[r], seconds, cost);
     new confirm = menu_create(title, "ConfirmHandler");
@@ -247,12 +256,14 @@ public ConfirmHandler(id, menu, item)
 {
     new selected = Selection(id, menu, item);
     if (selected != 0 || !Available(id) || g_Active[id]) return PLUGIN_HANDLED;
-    new r = g_QuoteRecipe[id], cost, seconds;
-    if (!Settings(r, cost, seconds) || cost != g_QuoteCost[id] || seconds != g_QuoteTime[id])
+    new r = g_QuoteRecipe[id], cost, seconds, required;
+    if (!Settings(r, cost, seconds, required) || cost != g_QuoteCost[id] || seconds != g_QuoteTime[id] || required != g_QuoteRequired[id])
     { client_print(id, print_chat, "[General] Recipe changed; reopen /general to review."); return PLUGIN_HANDLED; }
-    if (!Eligible(id, r, cost)) return PLUGIN_HANDLED;
+    if (!Eligible(id, r, cost, required)) return PLUGIN_HANDLED;
     g_Active[id] = r + 1;
     g_RunCost[id] = cost;
+    g_RunTime[id] = seconds;
+    g_RunRequired[id] = required;
     g_Userid[id] = get_user_userid(id);
     get_user_authid(id, g_Auth[id], charsmax(g_Auth[]));
     g_End[id] = get_gametime() + float(seconds);
@@ -267,10 +278,15 @@ public CraftTick()
         new auth[36];
         if (!Available(id) || !Identity(id, auth, charsmax(auth)) || get_user_userid(id) != g_Userid[id] || !equal(auth, g_Auth[id]))
         { Cancel(id, true); continue; }
+        new r = g_Active[id] - 1, cost, seconds, required;
+        if (!Settings(r, cost, seconds, required) || cost != g_RunCost[id] || seconds != g_RunTime[id] || required != g_RunRequired[id])
+        {
+            client_print(id, print_chat, "[General] Recipe settings changed or disabled. No charge.");
+            Cancel(id, false); continue;
+        }
         if (get_gametime() < g_End[id]) continue;
-        new r = g_Active[id] - 1, cost = g_RunCost[id];
         g_Active[id] = 0; // Clear first so one timer job cannot pay out twice.
-        if (!Eligible(id, r, cost))
+        if (!Eligible(id, r, cost, required))
         { client_print(id, print_chat, "[General] Requirements changed; crafting cancelled without payment."); continue; }
         new count = ARP_GetUserItemNum(id, g_Items[r]), wallet = ARP_GetUserWallet(id);
         ARP_SetUserItemNum(id, g_Items[r], count + 1);

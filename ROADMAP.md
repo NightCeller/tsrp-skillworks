@@ -2,7 +2,7 @@
 
 ## Alpha release preparation
 
-- [ ] Finalize project name and public repository under NightCeller.
+- [x] Publish TSRP SkillWorks source under NightCeller/tsrp-skillworks.
 - [ ] Compile and smoke-test this exact packaged candidate.
 - [ ] Establish a reproducible compiler build in CI with pinned dependencies.
 - [ ] Validate unmodified Apollo Core; isolate/document required compatibility fixes.
@@ -19,7 +19,8 @@
 ## Gameplay and maintenance
 
 - [ ] Replace remaining Stage/Apollo UI wording with independent project branding.
-- [ ] Make recipe thresholds, prices and timings consistently configurable.
+- [x] Make recipe switches, thresholds, prices and timings configurable in the v2 candidate.
+- [ ] Complete the v2 upgrade and live configuration test matrix.
 - [ ] Balance public-server ATM rewards, police requirements and cooldowns.
 - [ ] Improve item availability diagnostics and optional recipes.
 - [ ] Revisit teacher/education features after the current gameplay base is stable.

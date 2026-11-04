@@ -16,7 +16,7 @@ cd -- "$compiler_home"
 for name in Skills Cooking Computers Weapons General Drugs Fighting Law; do
   target="$repo/build/plugins/ARP_$name.amxx"
   rm -f -- "$target"
-  ./amxxpc "$repo/addons/amxmodx/scripting/ARP_$name.sma" "-i$includes" "-o$target"
+  ./amxxpc "$repo/addons/amxmodx/scripting/ARP_$name.sma" "-i$repo/addons/amxmodx/scripting/include" "-i$includes" "-o$target"
   [[ -s "$target" ]] || { echo "Missing output for ARP_$name" >&2; exit 1; }
 done
 echo "Compiled all eight plugins to $repo/build/plugins. Nothing installed or published."

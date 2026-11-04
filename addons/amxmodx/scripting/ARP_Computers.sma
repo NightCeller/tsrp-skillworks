@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* Apollo Computers 0.4.0, TSRP Server. ATM gameplay only.
- * Requires ARP_Skills 0.2.1, ARP_NPCs and SQLite Apollo.
+/* SkillWorks Computers 2.0.0-alpha.1 - configurable gameplay.
+ * Requires ARP_Skills, ARP_NPCs and SQLite Apollo.
  * Never edits skill values, existing NPC menus or player bank accounts.
  * A successful attempt creates wallet money. No automatic skill gains.
  * Both cooldown keys are committed together BEFORE starting an attempt.
@@ -15,8 +15,9 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 
-#define VERSION "0.4.0"
+#define VERSION "2.0.0-alpha.1"
 #define KEY_LEN 128
 #define WALLET_LIMIT 2000000000
 #define SQL_CREATE "CREATE TABLE IF NOT EXISTS arp_computer_cooldowns (key TEXT PRIMARY KEY NOT NULL, until_ts INTEGER NOT NULL)"
@@ -139,7 +140,7 @@ bool:Identity(id, auth[], len)
 bool:Available(id)
 {
     new auth[36];
-    return g_Ready && get_pcvar_num(p_Enabled) != 0 && is_user_alive(id) && Identity(id, auth, charsmax(auth));
+    return g_Ready && SW_Enabled(p_Enabled) && is_user_alive(id) && Identity(id, auth, charsmax(auth));
 }
 Skill(id)
 {
@@ -155,7 +156,8 @@ Skill(id)
 }
 bool:LoadSettings(options[Settings])
 {
-    for (new Settings:i; i < Settings; i++) options[i] = get_pcvar_num(p_Settings[i]);
+    for (new Settings:i; i < Settings; i++)
+        if (!SW_ReadInt(p_Settings[i], 0, 604800, options[i])) return false;
     return options[Required] >= 0 && options[Required] <= 100
         && options[Seconds] >= 1 && options[Seconds] <= 3600
         && options[Cooldown] >= 1 && options[Cooldown] <= 604800
@@ -375,6 +377,14 @@ public HackTick()
         new auth[36], key[KEY_LEN];
         if (!Available(id) || !Identity(id, auth, charsmax(auth)) || !equal(auth, g_Auth[id]) || get_user_userid(id) != g_Userid[id])
         { Cancel(id, true); continue; }
+        new current[Settings], bool:changed = !LoadSettings(current);
+        for (new Settings:i; i < Settings; i++)
+            if (current[i] != g_Run[id][i]) changed = true;
+        if (changed)
+        {
+            client_print(id, print_chat, "[Computers] ATM settings changed or invalid. Attempt cancelled; cooldown remains.");
+            Cancel(id, false); continue;
+        }
         if (!NearAtm(id, g_Active[id], g_Run[id][Radius]))
         { Cancel(id, true); continue; }
         AtmKey(g_Active[id], key, charsmax(key));

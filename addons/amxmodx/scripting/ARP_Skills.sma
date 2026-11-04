@@ -4,7 +4,7 @@
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
 /*
- * Apollo RP Skills - Stage 2 self-study, version 0.2.1
+ * SkillWorks Skills 2.0.0-alpha.1 - persistent skills and self-study
  * New Apollo-native implementation; Harbu's seven categories are the design reference.
  * Requires Apollo RP and AMXX 1.10 SQLX/SQLite. No Harbu plugin is required.
  *
@@ -27,8 +27,9 @@
 #include <amxmisc>
 #include <ApolloRP>
 #include <ApolloRP_Chat>
+#include <SkillWorks_Config>
 
-#define VERSION "0.2.1"
+#define VERSION "2.0.0-alpha.1"
 #define SKILL_COUNT 7
 #define SKILL_MAX 100
 
@@ -44,9 +45,9 @@ new bool:g_Ready;
 new p_LearnEnabled, p_LearnSeconds, p_LearnGain, p_LearnCost[SKILL_COUNT];
 new const g_DefaultCost[SKILL_COUNT][] = {"100", "250", "250", "300", "300", "150", "200"};
 new g_Menu[33] = {-1, ...};
-new g_QuoteSkill[33], g_QuoteValue[33], g_QuotePrice[33], g_QuoteGain[33], g_QuoteSeconds[33];
+new g_QuoteSkill[33], g_QuoteValue[33], g_QuotePrice[33], g_QuoteGain[33], g_QuoteSeconds[33], g_QuoteConfiguredGain[33];
 new g_Lesson[33]; // zero = inactive; otherwise skill index + 1
-new g_LessonValue[33], g_LessonPrice[33], g_LessonGain[33], g_LessonUserid[33];
+new g_LessonValue[33], g_LessonPrice[33], g_LessonGain[33], g_LessonSeconds[33], g_LessonConfiguredGain[33], g_LessonUserid[33];
 new g_LessonAuth[33][36];
 new Float:g_LessonEnd[33];
 
@@ -413,7 +414,7 @@ bool:LearningReady(id)
         client_print(id, print_chat, "[Skills] Wait for your Apollo account to load, or check the server log.");
         return false;
     }
-    if (!get_pcvar_num(p_LearnEnabled))
+    if (!SW_Enabled(p_LearnEnabled))
     {
         client_print(id, print_chat, "[Skills] Learning is disabled on this server.");
         return false;
@@ -434,11 +435,9 @@ bool:LearningReady(id)
 
 bool:LessonSettings(skill, &price, &seconds, &gain)
 {
-    price = get_pcvar_num(p_LearnCost[skill]);
-    seconds = get_pcvar_num(p_LearnSeconds);
-    gain = get_pcvar_num(p_LearnGain);
-    // Reject invalid server configuration instead of silently granting free lessons.
-    return price >= 0 && price <= 1000000 && seconds >= 1 && seconds <= 3600 && gain >= 1 && gain <= SKILL_MAX;
+    return SW_ReadInt(p_LearnCost[skill], 0, 1000000, price)
+        && SW_ReadInt(p_LearnSeconds, 1, 3600, seconds)
+        && SW_ReadInt(p_LearnGain, 1, SKILL_MAX, gain);
 }
 
 public CmdPrices(id)
@@ -510,6 +509,7 @@ public ChooseLesson(id, menu, item)
         client_print(id, print_chat, "[Skills] No lesson available for this skill value.");
         return PLUGIN_HANDLED;
     }
+    g_QuoteConfiguredGain[id] = gain;
     gain = min(gain, SKILL_MAX - values[skill]);
     if (ARP_GetUserBank(id) < price)
     {
@@ -553,7 +553,12 @@ public ConfirmLesson(id, menu, item)
         client_print(id, print_chat, "[Skills] Insufficient bank funds. No lesson started.");
         return PLUGIN_HANDLED;
     }
-    // Snapshot the confirmed terms; later cvar changes do not silently change price.
+    new price, seconds, gain;
+    if (!LessonSettings(skill, price, seconds, gain) || price != g_QuotePrice[id] || seconds != g_QuoteSeconds[id] || gain != g_QuoteConfiguredGain[id])
+    { client_print(id, print_chat, "[Skills] Lesson settings changed; reopen /skillmenu to review."); return PLUGIN_HANDLED; }
+    // Store both configured and capped gains so changes near the cap are detected.
+    g_LessonSeconds[id] = seconds;
+    g_LessonConfiguredGain[id] = gain;
     g_Lesson[id] = skill + 1;
     g_LessonValue[id] = values[skill];
     g_LessonPrice[id] = g_QuotePrice[id];
@@ -571,11 +576,17 @@ public LessonTick()
     {
         if (!g_Lesson[id]) continue;
         new auth[36];
-        if (!g_Ready || !get_pcvar_num(p_LearnEnabled) || !is_user_alive(id) ||
+        if (!g_Ready || !SW_Enabled(p_LearnEnabled) || !is_user_alive(id) ||
             !PlayerIdentity(id, auth, charsmax(auth)) || get_user_userid(id) != g_LessonUserid[id] || !equal(auth, g_LessonAuth[id]))
         {
             CancelLesson(id, true);
             continue;
+        }
+        new price, seconds, gain;
+        if (!LessonSettings(g_Lesson[id] - 1, price, seconds, gain) || price != g_LessonPrice[id] || seconds != g_LessonSeconds[id] || gain != g_LessonConfiguredGain[id])
+        {
+            client_print(id, print_chat, "[Skills] Lesson settings changed or invalid. No points or payment.");
+            CancelLesson(id, false); continue;
         }
         if (get_gametime() >= g_LessonEnd[id]) CompleteLesson(id);
     }
