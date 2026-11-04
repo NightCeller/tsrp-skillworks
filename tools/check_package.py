@@ -10,7 +10,9 @@ CONFIGS = {f'addons/amxmodx/configs/arp/{n.lower()}.cfg' for n in MODULES}
 EXACT = {'README.md','LICENSE','NOTICE','VERSION','CHANGELOG.md','ROADMAP.md',
          'CONTRIBUTING.md','SECURITY.md','.gitignore','.gitattributes',
          'examples/plugins-skillworks.ini','SHA256SUMS.txt',
-         'addons/amxmodx/scripting/include/SkillWorks_Config.inc'}
+         'addons/amxmodx/scripting/include/SkillWorks_Config.inc',
+         'addons/amxmodx/scripting/include/SkillWorks.inc',
+         'addons/amxmodx/scripting/include/SkillWorks_Progression.inc'}
 PREFIXES = ('docs/','tools/','tests/','.github/')
 TEXT_SUFFIXES = {'.md','.py','.ps1','.sh','.json','.yml','.yaml'}
 PATTERNS = {
@@ -47,7 +49,9 @@ def validate(root=ROOT):
                 if not line or line.startswith('//'): continue
                 if not re.fullmatch(r'arp_(?:skills|cooking|hack|weapons|general|drugs|fighting|law)_[a-z0-9_]+\s+"?\d+"?', line):
                     errors.append(f'{rel}: unsupported executable config line')
-    for rel in SOURCES | CONFIGS | {'LICENSE','NOTICE','README.md','VERSION','addons/amxmodx/scripting/include/SkillWorks_Config.inc'}:
+    for rel in SOURCES | CONFIGS | {'LICENSE','NOTICE','README.md','VERSION','addons/amxmodx/scripting/include/SkillWorks_Config.inc',
+         'addons/amxmodx/scripting/include/SkillWorks.inc',
+         'addons/amxmodx/scripting/include/SkillWorks_Progression.inc'}:
         if rel not in present: errors.append(f'{rel}: required file missing')
     return errors
 

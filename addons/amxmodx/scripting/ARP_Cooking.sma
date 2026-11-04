@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* SkillWorks Cooking 2.0.0-alpha.1 - configurable gameplay.
+/* SkillWorks Cooking 3.0.0-alpha.1 - configurable gameplay.
  * Keep ARP_Skills installed. This addon reads its cooking column only.
  * Ingredient packs and supplies shop are new design, not an exact Harbu port.
- * No skill awards, random failures, location restriction or education changes.
+ * Practical XP on completion; no random failures or location restriction.
  * Resources change only at completion. Apollo owns inventory/wallet persistence;
  * these in-memory operations are not a durable, crash-atomic SQL transaction.
  */
@@ -15,8 +15,10 @@
 #include <ApolloRP>
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
+#include <SkillWorks>
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
+new g_Activities[16];
 #define RECIPES 3
 #define MAX_STOCK 1000
 new const g_Food[RECIPES][] = {"Fries", "Hamburger", "Pizza"};
@@ -112,7 +114,9 @@ public plugin_cfg()
     }
     SQL_FreeHandle(q);
     g_Ready = !g_CoreError;
-    log_amx("ARP Cooking %s ready: three recipes, /cook, SQLite skills read-only.", VERSION);
+    for (new r; r < RECIPES; r++)
+        g_Activities[r] = SW_RegisterActivity(SW_COOKING, g_Food[r], p_Required[r], p_RecipeEnabled[r], p_Enabled, r, 1, 0, p_Time[r]);
+    log_amx("ARP Cooking %s ready: three recipes, /cook, SQLite practical XP enabled.", VERSION);
 }
 
 ExactItem(const wanted[])
@@ -248,7 +252,7 @@ public MainHandler(id, menu, item)
     g_QuoteTime[id] = seconds;
     g_QuoteRequired[id] = required;
     new title[192], key[8];
-    formatex(title, charsmax(title), "Cook 1 %s?^nUses 1 %s on completion^nTime: %d seconds. No skill gain.", g_Food[r], g_Pack[r], seconds);
+    formatex(title, charsmax(title), "Cook 1 %s?^nUses 1 %s on completion^nTime: %d seconds. Practical XP may apply.", g_Food[r], g_Pack[r], seconds);
     new confirm = menu_create(title, "ConfirmHandler");
     num_to_str(r, key, charsmax(key));
     menu_additem(confirm, "Start cooking", key);
@@ -394,6 +398,7 @@ public CookingTick()
             continue;
         }
         client_print(id, print_chat, "[Cooking] Finished! 1 %s added to /items; 1 pack used.", g_Food[r]);
+        SW_AwardXP(id, g_Activities[r]);
         log_amx("Steam %s cooked 1 %s using 1 %s", auth, g_Food[r], g_Pack[r]);
     }
 }
@@ -414,4 +419,9 @@ public plugin_end()
 {
     for (new id = 1; id <= 32; id++) { Cancel(id, false); CloseMenu(id); }
     if (g_Db != Empty_Handle) SQL_FreeHandle(g_Db);
+}
+
+public SW_ActivityAvailable(r)
+{
+    return g_Ready && r >= 0 && r < RECIPES && ARP_ValidItemId(g_Input[r]) && ARP_ValidItemId(g_Output[r]);
 }

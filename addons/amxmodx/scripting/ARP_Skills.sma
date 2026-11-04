@@ -4,14 +4,14 @@
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
 /*
- * SkillWorks Skills 2.0.0-alpha.1 - persistent skills and self-study
+ * SkillWorks Skills 3.0.0-alpha.1 - persistent skills and self-study
  * New Apollo-native implementation; Harbu's seven categories are the design reference.
  * Requires Apollo RP and AMXX 1.10 SQLX/SQLite. No Harbu plugin is required.
  *
  * CONFIGURATION: all seven skills start at 0, with a stage-one range of 0..100.
  * Change SKILL_MAX before compiling if a different scale is deliberately chosen.
  * Self-study configuration: addons/amxmodx/configs/arp/skills.cfg.
- * No passive gains, crafting, teacher offers, damage modifiers or HUD hooks yet.
+ * V3: practical XP from successful addon activities; /skills shows live unlocks.
  * Lesson payments use Apollo bank APIs on successful completion. Skills commit
  * immediately; bank persistence follows Core. These are NOT one crash-atomic
  * transaction: abrupt process loss can preserve a point before Core saves payment.
@@ -19,7 +19,7 @@
  * STORAGE: arp_skills in Apollo's existing SQLite database, keyed by Steam ID.
  * Small synchronous local queries deliberately avoid deferred writes and slot-reuse
  * races. A successful command means SQLite completed the write. No disconnect-time
- * cache exists. Revisit this approach before introducing frequent automatic XP.
+ * cache exists. XP writes are cooldown-limited and use short local transactions.
  * The plugin owns its SQL connection, never Apollo's shared connection tuple.
  * Existing incompatible schemas cause initialization failure, never automatic repair.
  */
@@ -29,7 +29,7 @@
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
 #define SKILL_COUNT 7
 #define SKILL_MAX 100
 
@@ -51,9 +51,12 @@ new g_LessonValue[33], g_LessonPrice[33], g_LessonGain[33], g_LessonSeconds[33],
 new g_LessonAuth[33][36];
 new Float:g_LessonEnd[33];
 
+#include "include/SkillWorks_Progression.inc"
+
 public plugin_init()
 {
     register_cvar("arp_skills_version", VERSION, FCVAR_SERVER);
+    InitProgression();
     register_clcmd("arp_skills", "CmdSkills");
     register_concmd("arp_skill_set", "CmdChange");
     register_concmd("arp_skill_add", "CmdChange");
@@ -78,8 +81,8 @@ public ARP_Init()
 {
     ARP_RegisterPlugin("Skills", VERSION, "TSRP Server", "Persistent skills and paid self-study");
     // TalkArea owns say/say_team; register with its dispatcher.
-    ARP_RegisterChat("/skills", "ChatSkills", "Shows your saved skill values");
-    ARP_RegisterTeamChat("/skills", "ChatSkills", "Shows your saved skill values");
+    ARP_RegisterChat("/skills", "ChatSkills", "View levels, practical XP and unlocks");
+    ARP_RegisterTeamChat("/skills", "ChatSkills", "View levels, practical XP and unlocks");
     ARP_RegisterChat("/skillmenu", "ChatSkillMenu", "Study a skill using your bank balance");
     ARP_RegisterTeamChat("/skillmenu", "ChatSkillMenu", "Study a skill using your bank balance");
     ARP_RegisterChat("/learn", "ChatLearn", "Open the self-study menu");
@@ -151,6 +154,7 @@ public ARP_Init()
         set_fail_state("Existing arp_skills schema is incompatible. No player data was changed.");
         return;
     }
+    if (!InitXPDatabase()) { set_fail_state("Incompatible or unavailable SkillWorks XP table; see log."); return; }
     g_Ready = true;
     log_amx("ARP Skills %s ready: SQLite arp_skills, seven skills, range 0..%d.", VERSION, SKILL_MAX);
 }
@@ -228,19 +232,7 @@ public ChatSkills(id, mode, const message[])
 
 public CmdSkills(id)
 {
-    new values[SKILL_COUNT], auth[36];
-    if (!LoadSkills(id, values, auth, charsmax(auth)))
-    {
-        client_print(id, print_chat, "[Skills] Unavailable: wait for your Apollo account to load, or check the server log.");
-        return PLUGIN_HANDLED;
-    }
-    new text[1024], pos;
-    pos = formatex(text, charsmax(text), "YOUR SKILLS - Stage 2^n^n");
-    for (new i; i < SKILL_COUNT; i++)
-        pos += formatex(text[pos], charsmax(text) - pos, "%s: %d / %d^n", g_Labels[i], values[i], SKILL_MAX);
-    formatex(text[pos], charsmax(text) - pos, "^nProgress is saved to your Steam ID.^nType /skillmenu to study. Skill effects and crafting come later.");
-    show_motd(id, text, "Apollo RP Skills");
-    return PLUGIN_HANDLED;
+    return ShowSkillsMenu(id);
 }
 
 bool:AdminAllowed(id)
@@ -320,15 +312,11 @@ public CmdChange(id)
         console_print(id, "[Skills] Result must be within 0..%d; no skill changed.", SKILL_MAX);
         return PLUGIN_HANDLED;
     }
-    new sql[256];
-    formatex(sql, charsmax(sql), "UPDATE arp_skills SET %s=%d WHERE steamid='%s'", g_Keys[skill], value, auth);
-    new Handle:q = RunQuery(sql);
-    if (q == Empty_Handle)
+    if (!SaveLevel(auth, skill, values[skill], value, true))
     {
-        console_print(id, "[Skills] Save failed; see server log.");
+        console_print(id, "[Skills] Save failed; no level or XP changed. See server log.");
         return PLUGIN_HANDLED;
     }
-    SQL_FreeHandle(q);
     // Admin edits cancel a pending quote/lesson so it cannot overwrite new values.
     CancelLesson(target, true);
     DestroyOwnMenu(target);
@@ -615,19 +603,9 @@ CompleteLesson(id)
         client_print(id, print_chat, "[Skills] Not enough money left in your BANK. Lesson cancelled without points or payment.");
         return;
     }
-    new sql[384];
-    formatex(sql, charsmax(sql), "UPDATE arp_skills SET %s=%d WHERE steamid='%s' AND %s=%d", g_Keys[skill], oldValue + gain, auth, g_Keys[skill], oldValue);
-    new Handle:q = RunQuery(sql);
-    if (q == Empty_Handle)
+    if (!SaveLevel(auth, skill, oldValue, oldValue + gain, false))
     {
-        client_print(id, print_chat, "[Skills] Lesson could not be saved. No payment taken; tell an admin.");
-        return;
-    }
-    new changed = SQL_AffectedRows(q);
-    SQL_FreeHandle(q);
-    if (changed != 1)
-    {
-        client_print(id, print_chat, "[Skills] Record changed; no payment taken. Please try again.");
+        client_print(id, print_chat, "[Skills] Record changed or save failed; no payment taken.");
         return;
     }
     // Apollo manages bank persistence. Do not write Core's account table directly.

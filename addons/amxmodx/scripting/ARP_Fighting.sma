@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* SkillWorks Fighting 2.0.0-alpha.1 - configurable gameplay.
+/* SkillWorks Fighting 3.0.0-alpha.1 - configurable gameplay.
  * Skills are read-only. Apollo owns job persistence. No raw health writes.
  * Unarmed-only bonus: TSX converts WeaponInfo 0 to current weapon 36.
  * Jobs require explicit admin setup; never overwrite existing job definitions.
@@ -13,10 +13,11 @@
 #include <ApolloRP>
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
+#include <SkillWorks>
 #include <hamsandwich>
 #include <tsfun>
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
 #define KUNGFU_WEAPON 36
 #define SQL_SKILL "SELECT fighting FROM arp_skills WHERE steamid='%s'"
 new const g_Jobs[][] = {"Dojo Worker", "Fighter"};
@@ -65,6 +66,8 @@ public plugin_cfg()
     { set_fail_state("Load ARP_Skills before Fighting; arp_skills is required."); return; }
     SQL_FreeHandle(q);
     g_Ready = !g_CoreError;
+    for (new r; r < sizeof g_Jobs; r++)
+        SW_RegisterActivity(SW_FIGHTING, g_Jobs[r], p_Required, p_Jobs, p_Enabled, r, 0);
     log_amx("Fighting %s ready. Jobs require admin arp_fighting_setup. Damage hook=%d.", VERSION, g_DamageHook);
 }
 Handle:Query(const sql[])
@@ -265,4 +268,11 @@ public plugin_end()
 {
     for (new id = 1; id <= 32; id++) CloseMenu(id);
     if (g_Db != Empty_Handle) SQL_FreeHandle(g_Db);
+}
+
+public SW_ActivityAvailable(r)
+{
+    if (!g_Ready || r < 0 || r >= sizeof g_Jobs) return 0;
+    new job = ExactJob(g_Jobs[r]);
+    return job && ARP_GetJobAccess(job) == 0;
 }

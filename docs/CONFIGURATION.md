@@ -1,4 +1,4 @@
-# v2 configuration reference
+# Gameplay configuration reference
 
 Edit `addons/amxmodx/configs/arp/<module>.cfg`. Each module executes its own file
 on map load. For immediate testing, enter a cvar and value in the **server console**;
@@ -103,3 +103,7 @@ settings now use the same strict reader.
 
 These checks do not make separate Apollo and Skills writes crash-atomic. Test
 operator changes on a server copy before applying them to an active public game.
+
+## V3 practical XP
+
+See [PROGRESSION.md](PROGRESSION.md) for the new `skills.cfg` settings.

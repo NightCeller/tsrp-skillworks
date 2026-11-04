@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* SkillWorks Computers 2.0.0-alpha.1 - configurable gameplay.
+/* SkillWorks Computers 3.0.0-alpha.1 - configurable gameplay.
  * Requires ARP_Skills, ARP_NPCs and SQLite Apollo.
  * Never edits skill values, existing NPC menus or player bank accounts.
- * A successful attempt creates wallet money. No automatic skill gains.
+ * A successful attempt creates wallet money. Practical XP is requested only after a successful payout.
  * Both cooldown keys are committed together BEFORE starting an attempt.
  * Cancellation never clears cooldowns. An interrupted attempt never resumes.
  * Wallet persistence belongs to Core; reward and cooldown are not crash-atomic.
@@ -16,8 +16,10 @@
 #include <ApolloRP>
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
+#include <SkillWorks>
+new g_Activity;
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
 #define KEY_LEN 128
 #define WALLET_LIMIT 2000000000
 #define SQL_CREATE "CREATE TABLE IF NOT EXISTS arp_computer_cooldowns (key TEXT PRIMARY KEY NOT NULL, until_ts INTEGER NOT NULL)"
@@ -99,6 +101,7 @@ public plugin_cfg()
     if (q == Empty_Handle) { set_fail_state("Incompatible Computers cooldown table."); return; }
     SQL_FreeHandle(q);
     g_Ready = !g_CoreError;
+    g_Activity = SW_RegisterActivity(SW_COMPUTERS, "ATM hacking", p_Settings[Required], p_Enabled, p_Enabled, 0);
     log_amx("ARP Computers %s ready: /computers near an Apollo ATM; persistent cooldowns.", VERSION);
 }
 
@@ -408,7 +411,10 @@ public HackTick()
         if (wallet < 0 || wallet > WALLET_LIMIT - amount)
         { client_print(id, print_chat, "[Computers] Wallet limit: no reward added; cooldown remains."); continue; }
         ARP_SetUserWallet(id, wallet + amount);
-        client_print(id, print_chat, "[Computers] Success! $%d added to your wallet. Computers skill unchanged.", amount);
+        if (ARP_GetUserWallet(id) != wallet + amount)
+        { client_print(id, print_chat, "[Computers] Reward failed; no XP awarded."); continue; }
+        SW_AwardXP(id, g_Activity);
+        client_print(id, print_chat, "[Computers] Success! $%d added to your wallet. Check /skills for progress.", amount);
         log_amx("SUCCESS %s at %s reward=%d", auth, key, amount);
     }
 }
@@ -428,4 +434,10 @@ public plugin_end()
 {
     for (new id = 1; id <= 32; id++) { Cancel(id, false); CloseMenu(id); }
     if (g_Db != Empty_Handle) SQL_FreeHandle(g_Db);
+}
+
+public SW_ActivityAvailable(localIndex)
+{
+    new options[Settings];
+    return g_Ready && LoadSettings(options);
 }

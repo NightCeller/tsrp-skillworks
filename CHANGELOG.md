@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0-alpha.1 — development candidate, 2026-11-04
+
+- Added practical XP on successful crafting and ATM payouts, with configurable
+  rewards/curve, difficulty reduction and saved per-skill cooldowns.
+- Added `arp_skill_xp`; retained `arp_skills` schema/levels and existing filenames.
+  Level/XP/cooldown awards commit atomically; Apollo economy remains separate.
+- Added V3 activity registration/award natives and live `/skills` overview/details.
+- Education preserves partial XP, clears it at cap; admin level edits clear it.
+  Practical awards are suppressed during study. Fighting/Law get no practical XP.
+- Verified ATM wallet update before awarding XP; retained existing action checks.
+- Added upgrade/rollback guide and progression/SQL tests. All eight plugins compile
+  without warnings; 26 automated checks pass. V3 runtime testing remains pending.
+- V2 Flashlight configuration test was reported working before this development;
+  other V2 acceptance checks are not assumed completed.
+
 ## 2.0.0-alpha.1 — development candidate, 2026-11-04
 
 - Added per-recipe enable switches and skill requirements for Cooking, Weapons,

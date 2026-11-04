@@ -23,7 +23,7 @@ With PowerShell, from this repository:
 This compiles the eight sources into `build/plugins`. It does not install them,
 change the live server, download dependencies or publish a release. The compiler
 must have its companion DLLs in CompilerDir. Alternatively copy the eight `.sma`
-files into your working scripting folder **and copy `SkillWorks_Config.inc` into
+files into your working scripting folder **and copy all three project-owned SkillWorks `.inc` files into
 its `include` folder**, run your normal AMXX compiler and collect
 only their newly compiled `.amxx` files. Resolve any compile errors before installation.
 
@@ -75,8 +75,8 @@ The compiled fallback is also zero in v2. Confirm the cvar reads 0 after startup
 before combat testing; an older server config can still explicitly enable it.
 
 Retain source, configs and dependency versions alongside backups. All eight plugin versions
-now match the repository candidate `2.0.0-alpha.1`. Read [v2 upgrade steps](UPGRADING-V2.md).
-No skill schema migration is needed for this update. The core Skills
+now match the repository candidate `3.0.0-alpha.1`. Read [V3 upgrade steps](UPGRADING-V3.md).
+The original skill schema stays unchanged; a separate XP table is added automatically. The core Skills
 plugin refuses an incompatible existing schema rather than repairing it.
 
 ## Uninstall / rollback

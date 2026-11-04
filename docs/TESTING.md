@@ -1,3 +1,17 @@
+# V3 validation status
+
+- All eight final sources compile with AMXX 1.10.0.5487 without warnings.
+- 26 Python checks pass: original configuration/distribution checks plus extracted
+  SQLite XP statements, transaction rollback/reopen/contention and progression
+  reference-model boundaries. These do **not execute Pawn or HLDS**.
+- V3 gameplay, menus, dynamic cross-plugin callbacks and all new award hooks are
+  pending live validation. Follow [UPGRADING-V3.md](UPGRADING-V3.md).
+- V2's initial Flashlight configuration test was reported working. Other V2
+  configuration checks are not automatically considered passed.
+
+The historical evidence and limitations below remain useful. Counts and compiler
+statements labelled V2 refer to that earlier candidate, not the V3 test run.
+
 # Testing status and limits
 
 This is an alpha source candidate, not a claim that every path is verified.

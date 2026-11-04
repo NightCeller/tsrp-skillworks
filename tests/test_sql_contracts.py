@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'addons/amxmodx/scripting'
-SKILLS = (SOURCE / 'ARP_Skills.sma').read_text()
+SKILLS = (SOURCE / 'ARP_Skills.sma').read_text() + (SOURCE / 'include/SkillWorks_Progression.inc').read_text()
 COMPUTERS = (SOURCE / 'ARP_Computers.sma').read_text()
 CREATE = re.search(r'RunQuery\("(CREATE TABLE IF NOT EXISTS arp_skills [^"]+)"\)', SKILLS)[1]
 LESSON = re.search(r'"(UPDATE arp_skills SET %s=%d WHERE steamid=\'%s\' AND %s=%d)"', SKILLS)[1]

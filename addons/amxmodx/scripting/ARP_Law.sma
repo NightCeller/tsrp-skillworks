@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* SkillWorks Law 2.0.0-alpha.1 - configurable gameplay.
+/* SkillWorks Law 3.0.0-alpha.1 - configurable gameplay.
  * Configurable Law threshold (default 21) for Lawyer, Jury and City Judge.
  * Reads existing skills; Apollo owns salary and job persistence.
  * Existing job definitions are never overwritten. Admin setup creates missing jobs.
@@ -14,8 +14,9 @@
 #include <ApolloRP>
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
+#include <SkillWorks>
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
 #define SQL_SKILL "SELECT law FROM arp_skills WHERE steamid='%s'"
 new const g_Jobs[][] = {"Lawyer", "Jury", "City Judge"};
 new const g_Salaries[] = {20, 20, 30};
@@ -55,6 +56,8 @@ public plugin_cfg()
     { set_fail_state("Load ARP_Skills before Law; arp_skills is required."); return; }
     SQL_FreeHandle(q);
     g_Ready = !g_CoreError;
+    for (new r; r < sizeof g_Jobs; r++)
+        SW_RegisterActivity(SW_LAW, g_Jobs[r], p_Required, p_Enabled, p_Enabled, r, 0);
     log_amx("Law %s ready. Jobs can be prepared with admin arp_law_setup.", VERSION);
 }
 Handle:Query(const sql[])
@@ -219,4 +222,11 @@ public plugin_end()
 {
     for (new id = 1; id <= 32; id++) CloseMenu(id);
     if (g_Db != Empty_Handle) SQL_FreeHandle(g_Db);
+}
+
+public SW_ActivityAvailable(r)
+{
+    if (!g_Ready || r < 0 || r >= sizeof g_Jobs) return 0;
+    new job = ExactJob(g_Jobs[r]);
+    return job && SafeJobAccess(job);
 }

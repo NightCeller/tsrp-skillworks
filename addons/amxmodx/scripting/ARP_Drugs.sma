@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * See LICENSE and NOTICE for terms and the Half-Life linking exception.
  */
-/* SkillWorks Drugs 2.0.0-alpha.1 - configurable gameplay.
- * Requires ARP_Skills and ARP_Items. Reads skills; never changes them.
+/* SkillWorks Drugs 3.0.0-alpha.1 - configurable gameplay.
+ * Requires ARP_Skills and ARP_Items. Reads levels; requests practical XP from ARP_Skills on success.
  * Adds existing Apollo consumable inventory items, uses their existing item handlers.
  * Wallet is charged only at completion after all requirements are rechecked.
  * Core owns persistence; wallet and inventory are not crash-atomic writes.
@@ -14,8 +14,10 @@
 #include <ApolloRP>
 #include <ApolloRP_Chat>
 #include <SkillWorks_Config>
+#include <SkillWorks>
 
-#define VERSION "2.0.0-alpha.1"
+#define VERSION "3.0.0-alpha.1"
+new g_Activities[16];
 #define RECIPES 4
 #define STOCK_LIMIT 1000
 #define SQL_SKILL "SELECT drugs FROM arp_skills WHERE steamid='%s'"
@@ -91,7 +93,9 @@ public plugin_cfg()
     { set_fail_state("Load Skills before Drugs Crafting; arp_skills is required."); return; }
     SQL_FreeHandle(q);
     g_Ready = !g_CoreError;
-    log_amx("ARP Drugs %s ready: %d/4 recipes available, /drugs; skills read-only.", VERSION, available);
+    for (new r; r < RECIPES; r++)
+        g_Activities[r] = SW_RegisterActivity(SW_DRUGS, g_Names[r], p_Required[r], p_RecipeEnabled[r], p_Enabled, r, 1, p_Cost[r], p_Time[r]);
+    log_amx("ARP Drugs %s ready: %d/4 recipes available, /drugs; practical XP enabled.", VERSION, available);
 }
 Handle:Query(const sql[])
 {
@@ -245,7 +249,7 @@ public RecipeHandler(id, menu, item)
     g_QuoteTime[id] = seconds;
     g_QuoteRequired[id] = required;
     new title[256];
-    formatex(title, charsmax(title), "Craft 1 %s?^nTime: %ds^nWallet charge at completion: $%d^nDelivered to /items. No skill gain.^nCancel/death/disconnect: no charge.", g_Names[r], seconds, cost);
+    formatex(title, charsmax(title), "Craft 1 %s?^nTime: %ds^nWallet charge at completion: $%d^nDelivered to /items. Practical XP may apply.^nCancel/death/disconnect: no charge.", g_Names[r], seconds, cost);
     new confirm = menu_create(title, "ConfirmHandler");
     menu_additem(confirm, "Start crafting", "0");
     g_Menu[id] = confirm;
@@ -299,7 +303,8 @@ public CraftTick()
             client_print(id, print_chat, "[Drugs] Payment failed; removed the crafted item.");
             continue;
         }
-        client_print(id, print_chat, "[Drugs] Crafted 1 %s in /items. Wallet charged $%d. Drugs skill unchanged.", g_Names[r], cost);
+        client_print(id, print_chat, "[Drugs] Crafted 1 %s in /items. Wallet charged $%d. Check /skills for progress.", g_Names[r], cost);
+        SW_AwardXP(id, g_Activities[r]);
         log_amx("CRAFT %s item=%s cost=%d", auth, g_Names[r], cost);
     }
 }
@@ -318,4 +323,9 @@ public plugin_end()
 {
     for (new id = 1; id <= 32; id++) { Cancel(id, false); CloseMenu(id); }
     if (g_Db != Empty_Handle) SQL_FreeHandle(g_Db);
+}
+
+public SW_ActivityAvailable(r)
+{
+    return g_Ready && r >= 0 && r < RECIPES && ARP_ValidItemId(g_Items[r]);
 }

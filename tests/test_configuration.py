@@ -27,6 +27,7 @@ def defaults(module, source):
                           f'{prefix}_seconds_{key}': seconds, f'{prefix}_cost_{key}': cost})
     elif module == 'Skills':
         found.update({f'arp_skills_cost_{key}': cost for key, cost in zip(array(source, 'g_Keys'), array(source, 'g_DefaultCost'), strict=True)})
+        found.update({f'arp_skills_xp_reward_{key}': reward for key, reward in zip(array(source, 'g_Keys'), array(source, 'g_XPDefaults'), strict=True)})
     elif module == 'Computers':
         found.update(dict(zip(array(source, 'g_Cvars'), array(source, 'g_Defaults'), strict=True)))
     return found
@@ -37,6 +38,7 @@ class ConfigurationContract(unittest.TestCase):
         for module in MODULES:
             with self.subTest(module=module):
                 source = (SCRIPTING / f'ARP_{module}.sma').read_text()
+                if module == 'Skills': source += (SCRIPTING / 'include/SkillWorks_Progression.inc').read_text()
                 config = (CONFIGS / f'{module.lower()}.cfg').read_text()
                 pairs = re.findall(r'^\s*(arp_\w+)\s+"?(\d+)"?\s*$', config, re.M)
                 self.assertEqual(len(pairs), len(dict(pairs)), 'Duplicate cvar in example')

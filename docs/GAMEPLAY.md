@@ -1,3 +1,8 @@
+> V3 adds practical XP on successful crafts and ATM payouts. See
+> [PROGRESSION.md](PROGRESSION.md) for the award rules. The recipe/job balance
+> below is retained; any historical statements about no automatic skill gains
+> are superseded by those V3 rules. Fighting/Law remain education-only.
+
 # Gameplay and default configuration
 
 Seven skills range from 0 to 100. All unlock checks use saved skill values.

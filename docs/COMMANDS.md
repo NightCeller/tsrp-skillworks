@@ -4,7 +4,7 @@ Use slash commands in chat (normal or team). Use console commands in the game co
 
 | Chat | Console | Purpose |
 | --- | --- | --- |
-| /skills | arp_skills | Display saved skills in a window |
+| /skills | arp_skills | Open levels/XP menu and skill details |
 | /skillmenu or /learn | arp_skillmenu | Self-study menu; bank payment |
 | /educationprices | arp_educationprices | Current lesson prices |
 | /cancellearning | arp_learn_cancel | Cancel unfinished lesson |
@@ -38,3 +38,7 @@ Valid skill keys: `general computers fighting law weapons cooking drugs`.
 Results outside 0–100 and invalid integer/skill inputs are rejected. Admin skill
 edits cancel that player's pending lesson. Job setup creates missing definitions,
 not player assignments. Job changes through the menus require confirmation.
+
+V3: `/skills` and `arp_skills` now open the progression overview; select a skill
+for XP and live unlocks. `/learn` and `/skillmenu` still open education.
+Admin set/add resets partial XP for the edited skill, retaining the XP cooldown.

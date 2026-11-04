@@ -23,3 +23,7 @@ The original uploaded archive is unchanged and is not part of this package.
 v2 adds one project-owned include (`SkillWorks_Config.inc`), not any Apollo or AMXX
 headers. The source package excludes local build outputs. Its package checks pass;
 the private original server archive is not copied into this repository.
+
+V3 adds two more project-owned includes, progression tests and documentation.
+The V3 source package uses the same allowlist and excludes compiler outputs,
+private server data and the original uploaded archive.
